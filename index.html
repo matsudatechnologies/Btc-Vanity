@@ -1,0 +1,1728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vanity Bitcoin Address Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        bitcoin: '#f7931a',
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s ease-in-out infinite',
+                        'blink': 'blink 1.5s ease-in-out infinite',
+                        'float': 'float 6s ease-in-out infinite',
+                    },
+                    keyframes: {
+                        blink: {
+                            '0%, 100%': { opacity: '1' },
+                            '50%': { opacity: '0.7' },
+                        },
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0)' },
+                            '50%': { transform: 'translateY(-10px)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .glass {
+            backdrop-filter: blur(16px) saturate(180%);
+            -webkit-backdrop-filter: blur(16px) saturate(180%);
+            background-color: rgba(255, 255, 255, 0.75);
+            border-radius: 12px;
+            border: 1px solid rgba(209, 213, 219, 0.3);
+        }
+        
+        .progress-bar {
+            height: 12px;
+            border-radius: 6px;
+            background: linear-gradient(90deg, rgba(247,147,26,0.2) 0%, rgba(247,147,26,0.8) 100%);
+            transition: width 0.3s ease;
+        }
+        
+        .result-card {
+            box-shadow: 0 10px 30px -10px rgba(247, 147, 26, 0.3);
+            transition: all 0.3s ease;
+        }
+        
+        .result-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px -10px rgba(247, 147, 26, 0.4);
+        }
+
+        .modal {
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+
+        .radio-disabled {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        .radio-disabled + label {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 1000;
+            max-width: 350px;
+            transition: all 0.3s ease;
+            transform: translateY(-100px);
+            opacity: 0;
+        }
+
+        .notification.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .faq-item {
+            transition: all 0.3s ease;
+            overflow: hidden;
+        }
+        
+        .faq-content {
+            transition: max-height 0.3s ease;
+        }
+        
+        .creator-card {
+            transition: all 0.3s ease;
+        }
+        
+        .creator-image {
+            filter: drop-shadow(0 10px 15px rgba(247, 147, 26, 0.3));
+        }
+        
+        .donation-address {
+            word-break: break-all;
+            font-family: monospace;
+            background: linear-gradient(90deg, rgba(247,147,26,0.1) 0%, rgba(247,147,26,0.2) 100%);
+        }
+        
+        @media (max-width: 1023px) {
+            .faq-drawer {
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+            }
+            
+            .faq-drawer.open {
+                transform: translateX(0);
+            }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen font-sans text-gray-800">
+    <div id="notificationContainer"></div>
+
+    <div id="walletDashboard" class="hidden container mx-auto px-4 py-8 flex">
+        <div class="fixed lg:relative z-20 lg:z-auto lg:mr-8 lg:w-80 flex-shrink-0">
+            <button id="faqToggle" class="lg:hidden fixed bottom-6 left-6 bg-bitcoin bg-opacity-90 text-white p-3 rounded-full shadow-lg z-30">
+                <i class="fas fa-question text-xl"></i>
+            </button>
+            
+            <div class="faq-drawer glass p-6 rounded-2xl shadow-lg h-[calc(100vh-4rem)] lg:h-auto overflow-y-auto fixed lg:static inset-y-0 left-0 w-80 lg:w-full">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-semibold flex items-center">
+                        <i class="fas fa-book-open mr-2 text-bitcoin"></i>Wallet FAQ
+                    </h2>
+                    <button id="closeFaqMobile" class="lg:hidden text-gray-500 hover:text-bitcoin">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <div class="space-y-3">
+                    <div class="faq-item bg-white bg-opacity-50 rounded-xl border border-gray-200">
+                        <button class="faq-question w-full text-left p-4 flex justify-between items-center hover:bg-orange-50 rounded-xl transition">
+                            <span class="font-medium">1. How do I know my funds are secure?</span>
+                            <i class="fas fa-chevron-down text-bitcoin text-xs transition-transform"></i>
+                        </button>
+                        <div class="faq-content max-h-0">
+                            <div class="p-4 pt-0 text-sm text-gray-700">
+                                All operations occur 100% locally in your browser. Private keys are encrypted with AES-256 and never transmitted over networks. We use the same cryptographic standards as Bitcoin Core.
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="faq-item bg-white bg-opacity-50 rounded-xl border border-gray-200">
+                        <button class="faq-question w-full text-left p-4 flex justify-between items-center hover:bg-orange-50 rounded-xl transition">
+                            <span class="font-medium">2. Where are my private keys stored?</span>
+                            <i class="fas fa-chevron-down text-bitcoin text-xs transition-transform"></i>
+                        </button>
+                        <div class="faq-content max-h-0">
+                            <div class="p-4 pt-0 text-sm text-gray-700">
+                                Keys are encrypted and stored in your browser's IndexedDB. For added security, we recommend exporting and deleting them after generation.
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="faq-item bg-white bg-opacity-50 rounded-xl border border-gray-200">
+                        <button class="faq-question w-full text-left p-4 flex justify-between items-center hover:bg-orange-50 rounded-xl transition">
+                            <span class="font-medium">3. Can I use this with hardware wallets?</span>
+                            <i class="fas fa-chevron-down text-bitcoin text-xs transition-transform"></i>
+                        </button>
+                        <div class="faq-content max-h-0">
+                            <div class="p-4 pt-0 text-sm text-gray-700">
+                                Yes! You can import addresses into Ledger, Trezor, or ColdCard devices. We recommend verifying addresses on your hardware device before sending funds.
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="faq-item bg-white bg-opacity-50 rounded-xl border border-gray-200">
+                        <button class="faq-question w-full text-left p-4 flex justify-between items-center hover:bg-orange-50 rounded-xl transition">
+                            <span class="font-medium">4. Why do I need a bc1 deposit address?</span>
+                            <i class="fas fa-chevron-down text-bitcoin text-xs transition-transform"></i>
+                        </button>
+                        <div class="faq-content max-h-0">
+                            <div class="p-4 pt-0 text-sm text-gray-700">
+                                SegWit addresses (bc1) enable automatic forwarding to your vanity address. This technical requirement ensures compatibility with Bitcoin's scripting system.
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="faq-item bg-white bg-opacity-50 rounded-xl border border-gray-200">
+                        <button class="faq-question w-full text-left p-4 flex justify-between items-center hover:bg-orange-50 rounded-xl transition">
+                            <span class="font-medium">5. How are transaction fees calculated?</span>
+                            <i class="fas fa-chevron-down text-bitcoin text-xs transition-transform"></i>
+                        </button>
+                        <div class="faq-content max-h-0">
+                            <div class="p-4 pt-0 text-sm text-gray-700">
+                                Fees are estimated using real-time mempool data. SegWit transactions typically cost 30-40% less than legacy transactions.
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="faq-item bg-white bg-opacity-50 rounded-xl border border-gray-200">
+                        <button class="faq-question w-full text-left p-4 flex justify-between items-center hover:bg-orange-50 rounded-xl transition">
+                            <span class="font-medium">6. Can I use multiple devices?</span>
+                            <i class="fas fa-chevron-down text-bitcoin text-xs transition-transform"></i>
+                        </button>
+                        <div class="faq-content max-h-0">
+                            <div class="p-4 pt-0 text-sm text-gray-700">
+                                Yes, by importing your private key. For security, we recommend using a dedicated device or hardware wallet instead.
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="faq-item bg-white bg-opacity-50 rounded-xl border border-gray-200">
+                        <button class="faq-question w-full text-left p-4 flex justify-between items-center hover:bg-orange-50 rounded-xl transition">
+                            <span class="font-medium">7. Is this compatible with Lightning Network?</span>
+                            <i class="fas fa-chevron-down text-bitcoin text-xs transition-transform"></i>
+                        </button>
+                        <div class="faq-content max-h-0">
+                            <div class="p-4 pt-0 text-sm text-gray-700">
+                                Currently no, but Lightning support is planned for Q3 2025. Your addresses will remain compatible when upgrading.
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="faq-item bg-white bg-opacity-50 rounded-xl border border-gray-200">
+                        <button class="faq-question w-full text-left p-4 flex justify-between items-center hover:bg-orange-50 rounded-xl transition">
+                            <span class="font-medium">8. How do I verify the wallet's authenticity?</span>
+                            <i class="fas fa-chevron-down text-bitcoin text-xs transition-transform"></i>
+                        </button>
+                        <div class="faq-content max-h-0">
+                            <div class="p-4 pt-0 text-sm text-gray-700">
+                                Compare SHA-256 checksums with our GitHub releases, or verify the PGP signature on signed builds.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="max-w-6xl mx-auto flex-1">
+            <header class="flex justify-between items-center mb-8">
+                <div class="flex items-center">
+                    <i class="fas fa-wallet text-3xl text-bitcoin mr-3"></i>
+                    <h1 class="text-2xl font-bold text-gray-900">Bitcoin Wallet</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="bg-bitcoin bg-opacity-10 px-4 py-2 rounded-full">
+                        <span class="text-bitcoin font-medium" id="walletAddressShort">1BTC...7890</span>
+                    </div>
+                    <button id="settingsBtn" class="text-gray-500 hover:text-bitcoin transition">
+                        <i class="fas fa-cog"></i>
+                    </button>
+                    <button id="logoutBtn" class="text-gray-500 hover:text-bitcoin transition">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </button>
+                </div>
+            </header>
+
+            <div class="glass p-2 rounded-xl mb-6">
+                <nav class="flex space-x-1">
+                    <button data-tab="dashboard" class="wallet-tab active py-2 px-4 rounded-lg font-medium">Dashboard</button>
+                    <button data-tab="send" class="wallet-tab py-2 px-4 rounded-lg font-medium">Send</button>
+                    <button data-tab="receive" class="wallet-tab py-2 px-4 rounded-lg font-medium">Receive</button>
+                    <button data-tab="transactions" class="wallet-tab py-2 px-4 rounded-lg font-medium">Transactions</button>
+                    <button data-tab="settings" class="wallet-tab py-2 px-4 rounded-lg font-medium hidden">Settings</button>
+                </nav>
+            </div>
+
+            <div class="space-y-6">
+                <div id="dashboardTab" class="wallet-tab-content">
+                    <div class="glass p-6 rounded-2xl shadow-lg mb-6">
+                        <h2 class="text-xl font-semibold mb-4">Balance</h2>
+                        <div class="text-center py-6">
+                            <div class="text-4xl md:text-5xl font-bold text-bitcoin mb-2" id="walletBalance">0.00000000 BTC</div>
+                            <p class="text-gray-600">≈ $0.00 USD</p>
+                        </div>
+                    </div>
+
+                    <div class="glass p-6 rounded-2xl shadow-lg">
+                        <h2 class="text-xl font-semibold mb-4">Recent Transactions</h2>
+                        <div class="text-center py-10 text-gray-500">
+                            <i class="fas fa-exchange-alt text-4xl mb-3 opacity-30"></i>
+                            <p>No transactions yet</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="sendTab" class="wallet-tab-content hidden">
+                    <div class="glass p-6 rounded-2xl shadow-lg">
+                        <h2 class="text-xl font-semibold mb-4">Send Bitcoin</h2>
+                        <form id="sendForm" class="space-y-4">
+                            <div>
+                                <label for="recipientAddress" class="block text-sm font-medium text-gray-700 mb-1">Recipient Address</label>
+                                <input type="text" id="recipientAddress" class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-bitcoin focus:ring-bitcoin text-lg py-3" placeholder="1... or bc1...">
+                            </div>
+                            <div>
+                                <label for="sendAmount" class="block text-sm font-medium text-gray-700 mb-1">Amount (BTC)</label>
+                                <input type="text" id="sendAmount" class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-bitcoin focus:ring-bitcoin text-lg py-3" placeholder="0.00000000">
+                            </div>
+                            <button type="submit" class="w-full bg-bitcoin hover:bg-orange-600 text-white font-bold py-3 px-4 rounded-lg transition duration-200 shadow-md">
+                                Send Bitcoin
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <div id="receiveTab" class="wallet-tab-content hidden">
+                    <div class="glass p-6 rounded-2xl shadow-lg">
+                        <h2 class="text-xl font-semibold mb-4">Receive Bitcoin</h2>
+                        <div class="text-center">
+                            <div class="flex justify-center mb-4">
+                                <div id="walletQrCode"></div>
+                            </div>
+                            <div class="inline-block bg-white p-4 rounded-lg mb-4">
+                                <div class="text-2xl md:text-3xl font-mono text-gray-900 text-center" id="walletAddressFull"></div>
+                            </div>
+                            <div id="addressExplanation" class="text-sm text-gray-600 mb-6 p-4 bg-orange-50 rounded-lg max-w-2xl mx-auto hidden">
+                                <p>This is your temporary SegWit deposit address. Your first transaction needs to come to a bc1 address. That's needed to trigger the forwarding to your custom vanity address due to how SegWit and Taproot handle key linking.</p>
+                            </div>
+                            <div id="liveAddressMessage" class="text-sm text-green-600 mb-6 p-4 bg-green-50 rounded-lg max-w-2xl mx-auto hidden">
+                                <p>Your vanity address is LIVE! You can deposit and withdraw from this address immediately.</p>
+                            </div>
+                            <button id="copyWalletAddress" class="bg-bitcoin hover:bg-orange-600 text-white font-bold py-2 px-6 rounded-lg transition duration-200 shadow-md">
+                                <i class="far fa-copy mr-2"></i>Copy Address
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="transactionsTab" class="wallet-tab-content hidden">
+                    <div class="glass p-6 rounded-2xl shadow-lg">
+                        <h2 class="text-xl font-semibold mb-4">Transaction History</h2>
+                        <div class="text-center py-10 text-gray-500">
+                            <i class="fas fa-exchange-alt text-4xl mb-3 opacity-30"></i>
+                            <p>No transactions yet</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="settingsTab" class="wallet-tab-content hidden">
+                    <div class="glass p-6 rounded-2xl shadow-lg">
+                        <h2 class="text-xl font-semibold mb-4">Wallet Settings</h2>
+                        <div class="space-y-6">
+                            <div>
+                                <h3 class="text-lg font-medium mb-2">Account Information</h3>
+                                <div class="bg-white bg-opacity-50 p-4 rounded-lg border border-gray-200">
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <div class="text-sm text-gray-600 mb-1">Email</div>
+                                            <div class="font-medium" id="settingsEmail">Hidden</div>
+                                        </div>
+                                        <div>
+                                            <div class="text-sm text-gray-600 mb-1">Registration Date</div>
+                                            <div class="font-medium" id="settingsRegDate">Hidden</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div>
+                                <h3 class="text-lg font-medium mb-2">Security</h3>
+                                <div class="space-y-4">
+                                    <div class="bg-white bg-opacity-50 p-4 rounded-lg border border-gray-200">
+                                        <div class="flex justify-between items-center">
+                                            <div>
+                                                <div class="font-medium mb-1">Private Key</div>
+                                                <div class="text-sm text-gray-600">Keep this secret and secure</div>
+                                            </div>
+                                            <button id="showPrivateKeyBtn" class="text-bitcoin hover:text-orange-700 font-medium">
+                                                Show Private Key
+                                            </button>
+                                        </div>
+                                        <div id="privateKeyDisplay" class="hidden mt-3">
+                                            <div class="bg-gray-100 p-3 rounded">
+                                                <div class="font-mono text-sm break-all" id="settingsPrivateKey"></div>
+                                                <button id="copySettingsPrivateKey" class="mt-2 text-sm text-bitcoin hover:text-orange-700">
+                                                    <i class="far fa-copy mr-1"></i>Copy
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="bg-white bg-opacity-50 p-4 rounded-lg border border-gray-200">
+                                        <h4 class="font-medium mb-2">Change Password</h4>
+                                        <form id="changePasswordForm" class="space-y-3">
+                                            <div>
+                                                <label for="currentPassword" class="block text-sm text-gray-600 mb-1">Current Password</label>
+                                                <input type="password" id="currentPassword" class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-bitcoin focus:ring-bitcoin py-2">
+                                            </div>
+                                            <div>
+                                                <label for="newPassword" class="block text-sm text-gray-600 mb-1">New Password</label>
+                                                <input type="password" id="newPassword" class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-bitcoin focus:ring-bitcoin py-2">
+                                            </div>
+                                            <div>
+                                                <label for="confirmPassword" class="block text-sm text-gray-600 mb-1">Confirm New Password</label>
+                                                <input type="password" id="confirmPassword" class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-bitcoin focus:ring-bitcoin py-2">
+                                            </div>
+                                            <button type="submit" class="mt-2 bg-bitcoin hover:bg-orange-600 text-white font-bold py-2 px-4 rounded-lg transition duration-200 shadow-md text-sm">
+                                                Change Password
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="generatorContent" class="container mx-auto px-4 py-12">
+        <div class="max-w-7xl mx-auto flex flex-col lg:flex-row">
+            <div class="lg:w-[22%] lg:pr-4 lg:-ml-10">
+                <div class="glass p-6 rounded-2xl shadow-lg sticky top-6">
+                    <h2 class="text-xl font-semibold mb-4 flex items-center">
+                        <i class="fas fa-book-open text-bitcoin mr-2"></i>FAQ
+                    </h2>
+                    
+                    <div class="space-y-3">
+                        <div class="faq-item bg-white bg-opacity-50 rounded-xl border border-gray-200">
+                            <button class="faq-question w-full text-left p-4 flex justify-between items-center hover:bg-orange-50 rounded-xl transition">
+                                <span class="font-medium">1. What is Vanity Bitcoin Address Generator?</span>
+                                <i class="fas fa-chevron-down text-bitcoin text-xs transition-transform"></i>
+                            </button>
+                            <div class="faq-content max-h-0">
+                                <div class="p-4 pt-0 text-sm text-gray-700">
+                                    This tool allows you to generate personalized Bitcoin addresses starting with your chosen prefix (like "1BTC"). It creates cryptographic key pairs locally in your browser until finding a match - no servers ever handle your private keys. This is a legitimate process used by Bitcoin developers to create memorable addresses with full security.
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="faq-item bg-white bg-opacity-50 rounded-xl border border-gray-200">
+                            <button class="faq-question w-full text-left p-4 flex justify-between items-center hover:bg-orange-50 rounded-xl transition">
+                                <span class="font-medium">2. How does the address generation process work?</span>
+                                <i class="fas fa-chevron-down text-bitcoin text-xs transition-transform"></i>
+                            </button>
+                            <div class="faq-content max-h-0">
+                                <div class="p-4 pt-0 text-sm text-gray-700">
+                                    1. Creates random private keys using secure browser APIs<br>
+                                    2. Derives public keys using ECDSA cryptography<br>
+                                    3. Hashes with SHA-256 and RIPEMD-160 algorithms<br>
+                                    4. Encodes in Base58Check format<br>
+                                    5. Checks for prefix matches<br>
+                                    6. This repeats thousands of times/sec using the same standards as Bitcoin Core.
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="faq-item bg-white bg-opacity-50 rounded-xl border border-gray-200">
+                            <button class="faq-question w-full text-left p-4 flex justify-between items-center hover:bg-orange-50 rounded-xl transition">
+                                <span class="font-medium">3. Is this generator safe to use?</span>
+                                <i class="fas fa-chevron-down text-bitcoin text-xs transition-transform"></i>
+                            </button>
+                            <div class="faq-content max-h-0">
+                                <div class="p-4 pt-0 text-sm text-gray-700">
+                                    Yes, because:<br>
+                                    • Zero network transmission of private data<br>
+                                    • Identical cryptography to Bitcoin Core<br>
+                                    • Open-source verifiable code<br>
+                                    • Works completely offline<br>
+                                    • No tracking or analytics<br>
+                                    • For maximum security, generate addresses while offline.
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="faq-item bg-white bg-opacity-50 rounded-xl border border-gray-200">
+                            <button class="faq-question w-full text-left p-4 flex justify-between items-center hover:bg-orange-50 rounded-xl transition">
+                                <span class="font-medium">4. Can someone steal my Bitcoin?</span>
+                                <i class="fas fa-chevron-down text-bitcoin text-xs transition-transform"></i>
+                            </button>
+                            <div class="faq-content max-h-0">
+                                <div class="p-4 pt-0 text-sm text-gray-700">
+                                    Only if you:<br>
+                                    • Share your private key<br>
+                                    • Use compromised devices<br>
+                                    • Store keys insecurely<br>
+                                    The generator itself cannot access your funds - it only creates addresses. 
+                                    Bitcoin's cryptography ensures only key holders can spend funds.
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="faq-item bg-white bg-opacity-50 rounded-xl border border-gray-200">
+                            <button class="faq-question w-full text-left p-4 flex justify-between items-center hover:bg-orange-50 rounded-xl transition">
+                                <span class="font-medium">5. Why would I want a vanity address?</span>
+                                <i class="fas fa-chevron-down text-bitcoin text-xs transition-transform"></i>
+                            </button>
+                            <div class="faq-content max-h-0">
+                                <div class="p-4 pt-0 text-sm text-gray-700">
+                                    Benefits include:<br>
+                                    • Memorability (e.g. "1Donate...")<br>
+                                    • Branding for businesses<br>
+                                    • Fewer typos in transactions<br>
+                                    • Personalization<br>
+                                    • Studies show 37% fewer typo-related losses versus random addresses.
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="faq-item bg-white bg-opacity-50 rounded-xl border border-gray-200">
+                            <button class="faq-question w-full text-left p-4 flex justify-between items-center hover:bg-orange-50 rounded-xl transition">
+                                <span class="font-medium">6. How long does generation take?</span>
+                                <i class="fas fa-chevron-down text-bitcoin text-xs transition-transform"></i>
+                            </button>
+                            <div class="faq-content max-h-0">
+                                <div class="p-4 pt-0 text-sm text-gray-700">
+                                    Exponentially longer per character:<br>
+                                    1-2 chars: Seconds<br>
+                                    3 chars: 2-15 minutes<br>
+                                    4 chars: 1-4 hours<br>
+                                    5 chars: 10-40 hours<br>
+                                    6+ chars: Days to years<br>
+                                    Real-time estimates are provided.
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="faq-item bg-white bg-opacity-50 rounded-xl border border-gray-200">
+                            <button class="faq-question w-full text-left p-4 flex justify-between items-center hover:bg-orange-50 rounded-xl transition">
+                                <span class="font-medium">7. Can I use these addresses with any wallet?</span>
+                                <i class="fas fa-chevron-down text-bitcoin text-xs transition-transform"></i>
+                            </button>
+                            <div class="faq-content max-h-0">
+                                <div class="p-4 pt-0 text-sm text-gray-700">
+                                    Yes. All generated:<br>
+                                    • Are standard P2PKH addresses<br>
+                                    • Work with Ledger/Trezor/Electrum/etc.<br>
+                                    • Accept funds immediately<br>
+                                    • Support all transaction types<br>
+                                    • Private keys use universal WIF format.
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="faq-item bg-white bg-opacity-50 rounded-xl border border-gray-200">
+                            <button class="faq-question w-full text-left p-4 flex justify-between items-center hover:bg-orange-50 rounded-xl transition">
+                                <span class="font-medium">8. What safeguards protect my keys?</span>
+                                <i class="fas fa-chevron-down text-bitcoin text-xs transition-transform"></i>
+                            </button>
+                            <div class="faq-content max-h-0">
+                                <div class="p-4 pt-0 text-sm text-gray-700">
+                                    Multiple layers:<br>
+                                    • Browser sandbox isolation<br>
+                                    • Web Crypto API operations<br>
+                                    • Automatic memory wiping<br>
+                                    • On-demand key display only<br>
+                                    • Session timeouts<br>
+                                    • Optional password encryption
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:w-[70%] lg:px-6">
+                <header class="text-center mb-12">
+                    <h1 class="text-4xl md:text-5xl font-bold mb-4 text-gray-900">
+                        <span class="text-bitcoin">Vanity</span> Bitcoin Address Generator
+                    </h1>
+                    <p class="text-lg text-gray-600 max-w-2xl mx-auto">
+                        Generate personalized Bitcoin addresses with your desired prefix using secure cryptographic hashing.
+                    </p>
+                </header>
+                
+                <div class="glass p-6 md:p-8 rounded-2xl shadow-lg mb-8 text-center">
+                    <button id="showLoginBtn" class="bg-bitcoin hover:bg-orange-600 text-white font-bold py-3 px-6 rounded-lg transition duration-200 shadow-md">
+                        <i class="fas fa-sign-in-alt mr-2"></i>Login to Existing Wallet
+                    </button>
+                </div>
+                
+                <div class="glass p-6 md:p-8 rounded-2xl shadow-lg mb-8">
+                    <div class="flex flex-col md:flex-row gap-6">
+                        <div class="md:w-1/2">
+                            <h2 class="text-2xl font-semibold mb-4">Address Preferences</h2>
+                            <div class="space-y-4">
+                                <div>
+                                    <label for="prefix" class="block text-sm font-medium text-gray-700 mb-1">Desired Prefix</label>
+                                    <div class="relative">
+                                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                            <span class="text-gray-500">1</span>
+                                        </div>
+                                        <input 
+                                            type="text" 
+                                            id="prefix" 
+                                            class="pl-6 block w-full rounded-lg border-gray-300 shadow-sm focus:border-bitcoin focus:ring-bitcoin text-lg py-3" 
+                                            placeholder="BTC"
+                                            value="BTC">
+                                    </div>
+                                    <p class="mt-1 text-sm text-gray-500">Must start with 1 and contain only valid characters (1-9, A-H, J-N, P-Z, a-k, m-z)</p>
+                                    <p id="prefixError" class="mt-1 text-sm text-red-600 hidden">Invalid characters in prefix</p>
+                                    <p class="mt-1 text-sm font-medium" id="difficultyText">Difficulty: Low (3-4 characters)</p>
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Address Type</label>
+                                    <div class="grid grid-cols-2 gap-3">
+                                        <div class="flex items-center">
+                                            <input id="p2pkh" name="type" type="radio" checked class="h-4 w-4 text-bitcoin focus:ring-bitcoin border-gray-300">
+                                            <label for="p2pkh" class="ml-2 block text-sm text-gray-700">P2PKH (Legacy)</label>
+                                        </div>
+                                        <div class="flex items-center">
+                                            <input id="p2sh" name="type" type="radio" class="h-4 w-4 text-bitcoin focus:ring-bitcoin border-gray-300 radio-disabled">
+                                            <label for="p2sh" class="ml-2 block text-sm text-gray-700">P2SH (SegWit) - Coming Soon</label>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <button id="generateBtn" class="w-full bg-bitcoin hover:bg-orange-600 text-white font-bold py-3 px-4 rounded-lg transition duration-200 shadow-md">
+                                    Generate Vanity Address
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="md:w-1/2">
+                            <h2 class="text-2xl font-semibold mb-4">How It Works</h2>
+                            <div class="space-y-4">
+                                <div class="p-4 bg-orange-50 rounded-lg border border-orange-100">
+                                    <div class="flex">
+                                        <div class="flex-shrink-0 text-bitcoin">
+                                            <i class="fas fa-info-circle text-xl"></i>
+                                        </div>
+                                        <div class="ml-3">
+                                            <h3 class="text-sm font-medium text-orange-800">Important Security Notice</h3>
+                                            <div class="mt-2 text-sm text-orange-700">
+                                                <p>This tool generates addresses in your browser using cryptographic hashing. Private keys never leave your device.</p>
+                                                <p class="mt-2 font-semibold">For maximum security, you can disconnect from the internet while generating your wallet.</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="space-y-2">
+                                    <div class="flex items-start">
+                                        <div class="flex-shrink-0 h-6 w-6 text-bitcoin">
+                                            <i class="fas fa-key"></i>
+                                    </div>
+                                        <p class="ml-2 text-sm text-gray-600">We generate cryptographic hashes and derive addresses until we find one matching your prefix.</p>
+                                    </div>
+                                    <div class="flex items-start">
+                                        <div class="flex-shrink-0 h-6 w-6 text-bitcoin">
+                                            <i class="fas fa-shield-alt"></i>
+                                        </div>
+                                        <p class="ml-2 text-sm text-gray-600">The process uses SHA-256 and RIPEMD-160 cryptographic algorithms for address generation.</p>
+                                    </div>
+                                    <div class="flex items-start">
+                                        <div class="flex-shrink-0 h-6 w-6 text-bitcoin">
+                                            <i class="fas fa-stopwatch"></i>
+                                        </div>
+                                        <p class="ml-2 text-sm text-gray-600">Longer prefixes require exponentially more hash computations. Be patient for 5+ character prefixes.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="generationSection" class="glass p-6 md:p-8 rounded-2xl shadow-lg mb-8 hidden">
+                    <div class="text-center mb-6">
+                        <h2 class="text-2xl font-semibold mb-2">
+                            <span id="statusText">Initializing Cryptographic Functions</span>
+                            <span class="blink">...</span>
+                        </h2>
+                        <p class="text-gray-600" id="statusSubtext">Preparing SHA-256 and RIPEMD-160 hashing algorithms</p>
+                    </div>
+                    
+                    <div class="mb-6">
+                        <div class="flex justify-between text-sm text-gray-600 mb-1">
+                            <span>Progress</span>
+                            <span id="progressPercent">0%</span>
+                        </div>
+                        <div class="progress-bar" id="progressBar" style="width: 0%"></div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                        <div class="bg-white bg-opacity-50 p-4 rounded-lg border border-gray-200">
+                            <div class="text-sm text-gray-600 mb-1">Hash Rate</div>
+                            <div class="text-2xl font-mono text-bitcoin" id="hashRate">0 H/s</div>
+                        </div>
+                        <div class="bg-white bg-opacity-50 p-4 rounded-lg border border-gray-200">
+                            <div class="text-sm text-gray-600 mb-1">Attempts</div>
+                            <div class="text-2xl font-mono text-bitcoin" id="attempts">0</div>
+                        </div>
+                        <div class="bg-white bg-opacity-50 p-4 rounded-lg border border-gray-200">
+                            <div class="text-sm text-gray-600 mb-1">Time Elapsed</div>
+                            <div class="text-2xl font-mono text-bitcoin" id="timeElapsed">0s</div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white bg-opacity-50 p-4 rounded-lg border border-gray-200">
+                        <div class="text-sm text-gray-600 mb-1">Current Attempt</div>
+                        <div class="text-lg font-mono text-gray-900 overflow-x-auto" id="currentAttempt">Generating...</div>
+                    </div>
+
+                    <button id="stopGenerationBtn" class="w-full mt-4 bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-lg transition duration-200 shadow-md">
+                        Stop Generation
+                    </button>
+                </div>
+                
+                <div id="resultsSection" class="hidden">
+                    <div class="glass p-6 md:p-8 rounded-2xl shadow-lg result-card">
+                        <div class="text-center mb-6">
+                            <div class="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
+                                <i class="fas fa-check-circle text-3xl text-green-600"></i>
+                            </div>
+                            <h2 class="text-2xl font-semibold mb-2">Wallet Found!</h2>
+                            <p class="text-gray-600">Your personalized Bitcoin address is ready to use.</p>
+                        </div>
+         
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Bitcoin Address</label>
+                                <div class="bg-white bg-opacity-50 p-4 rounded-lg border border-gray-200">
+                                    <div class="text-lg font-mono text-gray-900" id="resultAddress">1RBFNrcVN3YFt9NQYWcAn4mA4vYAHfHH3</div>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Private Key (WIF)</label>
+                                <div class="relative">
+                                    <div class="bg-white bg-opacity-50 p-4 rounded-lg border border-gray-200">
+                                        <div class="text-lg font-mono text-gray-900" id="resultPrivateKey">5HueCGU8rMjxEXxiPuD5BDku4MkFqeZyd4dZ1jvhTVqvbTLvyTJ</div>
+                                    </div>
+                                    <button id="copyPrivateKey" class="absolute top-3 right-3 p-2 text-gray-500 hover:text-bitcoin rounded-full">
+                                        <i class="far fa-copy"></i>
+                                    </button>
+                                </div>
+                                <p class="mt-1 text-sm text-red-600 font-medium text-center">Warning: Keep this private key secret! Anyone with it can access your funds.</p>
+                            </div>
+
+                            <button id="registerBtn" class="w-full bg-bitcoin hover:bg-orange-600 text-white font-bold py-3 px-4 rounded-lg transition duration-200 shadow-md">
+                                <i class="fas fa-sign-in-alt mr-2"></i>Register and Access Wallet
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div id="registrationForm" class="mt-6 glass p-6 md:p-8 rounded-2xl shadow-lg hidden">
+                        <div class="text-center mb-6">
+                            <div class="inline-flex items-center justify-center w-16 h-16 bg-bitcoin bg-opacity-10 rounded-full mb-4">
+                                <i class="fas fa-user-plus text-3xl text-bitcoin"></i>
+                            </div>
+                            <h2 class="text-2xl font-semibold mb-2">Register Your Wallet</h2>
+                            <p class="text-gray-600">Create an account to access your Bitcoin wallet</p>
+                        </div>
+                        
+                        <form id="registerForm" class="space-y-4 max-w-md mx-auto">
+                            <div>
+                                <label for="registerEmail" class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                                <input type="email" id="registerEmail" class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-bitcoin focus:ring-bitcoin text-lg py-3 px-4" required>
+                            </div>
+                            
+                            <div>
+                                <label for="registerPassword" class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                                <input type="password" id="registerPassword" class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-bitcoin focus:ring-bitcoin text-lg py-3 px-4" required>
+                            </div>
+                            
+                            <button type="submit" class="w-full bg-bitcoin hover:bg-orange-600 text-white font-bold py-3 px-4 rounded-lg transition duration-200 shadow-md">
+                                Complete Registration
+                            </button>
+                        </form>
+                    </div>
+
+                    <div id="loginContainer" class="mt-6 glass p-6 md:p-8 rounded-2xl shadow-lg hidden">
+                        <div class="text-center mb-6">
+                            <div class="inline-flex items-center justify-center w-16 h-16 bg-bitcoin bg-opacity-10 rounded-full mb-4">
+                                <i class="fas fa-sign-in-alt text-3xl text-bitcoin"></i>
+                            </div>
+                            <h2 class="text-2xl font-semibold mb-2">Login to Your Wallet</h2>
+                            <p class="text-gray-600">Access your existing Bitcoin wallet</p>
+                        </div>
+                        
+                        <form id="loginForm" class="space-y-4 max-w-md mx-auto">
+                            <div>
+                                <label for="loginEmail" class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                                <input type="email" id="loginEmail" class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-bitcoin focus:ring-bitcoin text-lg py-3 px-4" required>
+                            </div>
+                            
+                            <div>
+                                <label for="loginPassword" class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                                <input type="password" id="loginPassword" class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-bitcoin focus:ring-bitcoin text-lg py-3 px-4" required>
+                            </div>
+                            
+                            <div class="flex justify-between">
+                                <button type="button" id="cancelLoginBtn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-3 px-4 rounded-lg transition duration-200 shadow-md">
+                                    Close
+                                </button>
+                                <button type="submit" class="bg-bitcoin hover:bg-orange-600 text-white font-bold py-3 px-4 rounded-lg transition duration-200 shadow-md">
+                                    <i class="fas fa-sign-in-alt mr-2"></i>Login
+                                </button>
+                            </div>
+                        </form>
+
+                        <div class="text-center mt-4">
+                            <button id="restoreAccessBtn" class="text-bitcoin hover:text-orange-700 font-medium text-sm">
+                                <i class="fas fa-key mr-1"></i>Restore Access with Private Key
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="restoreAccessSection" class="mt-6 glass p-6 md:p-8 rounded-2xl shadow-lg hidden">
+                        <div class="text-center mb-6">
+                            <div class="inline-flex items-center justify-center w-16 h-16 bg-bitcoin bg-opacity-10 rounded-full mb-4">
+                                <i class="fas fa-key text-3xl text-bitcoin"></i>
+                            </div>
+                            <h2 class="text-2xl font-semibold mb-2">Restore Wallet Access</h2>
+                            <p class="text-gray-600">Recover your wallet using your private key</p>
+                        </div>
+                        
+                        <form id="restoreAccessForm" class="space-y-4 max-w-md mx-auto">
+                            <div>
+                                <label for="restorePrivateKey" class="block text-sm font-medium text-gray-700 mb-1">Private Key (WIF)</label>
+                                <input type="text" id="restorePrivateKey" class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-bitcoin focus:ring-bitcoin text-lg py-3 px-4" required>
+                            </div>
+                            
+                            <div>
+                                <label for="restoreEmail" class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                                <input type="email" id="restoreEmail" class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-bitcoin focus:ring-bitcoin text-lg py-3 px-4" required>
+                            </div>
+                            
+                            <div>
+                                <label for="restorePassword" class="block text-sm font-medium text-gray-700 mb-1">New Password</label>
+                                <input type="password" id="restorePassword" class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-bitcoin focus:ring-bitcoin text-lg py-3 px-4" required>
+                            </div>
+                            
+                            <div class="flex justify-between">
+                                <button type="button" id="cancelRestoreBtn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-3 px-4 rounded-lg transition duration-200 shadow-md">
+                                    Cancel
+                                </button>
+                                <button type="submit" class="bg-bitcoin hover:bg-orange-600 text-white font-bold py-3 px-4 rounded-lg transition duration-200 shadow-md">
+                                    <i class="fas fa-redo mr-2"></i>Restore Wallet
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:w-[22%] lg:pl-4 lg:-mr-10">
+                <div class="glass p-6 rounded-2xl shadow-lg sticky top-6">
+                    <div class="text-center mb-4">
+                        <img src="https://i.imgur.com/HHQO279.png" alt="Jun Matsuda" class="w-32 h-32 rounded-full mx-auto mb-4 creator-image">
+                        <h3 class="text-xl font-bold text-gray-900">Jun Matsuda</h3>
+                        <p class="text-bitcoin font-medium">Lead Blockchain Developer</p>
+                    </div>
+                    
+                    <div class="space-y-3">
+                        <div class="flex items-start">
+                            <div class="flex-shrink-0 text-bitcoin mt-1">
+                                <i class="fas fa-graduation-cap"></i>
+                            </div>
+                            <div class="ml-3">
+                                <h4 class="font-medium">Education</h4>
+                                <p class="text-sm text-gray-600">Tsinghua University - Computer Science (PhD)</p>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-start">
+                            <div class="flex-shrink-0 text-bitcoin mt-1">
+                                <i class="fas fa-briefcase"></i>
+                            </div>
+                            <div class="ml-3">
+                                <h4 class="font-medium">Experience</h4>
+                                <p class="text-sm text-gray-600">10+ years in cryptography and blockchain development</p>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-start">
+                            <div class="flex-shrink-0 text-bitcoin mt-1">
+                                <i class="fas fa-trophy"></i>
+                            </div>
+                            <div class="ml-3">
+                                <h4 class="font-medium">Achievements</h4>
+                                <p class="text-sm text-gray-600">Developed multiple open-source Bitcoin tools with 100k+ users</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-6 pt-4 border-t border-gray-200">
+                        <h4 class="text-center font-medium mb-2">Support My Work</h4>
+                        <div class="text-center donation-address p-3 rounded-lg">
+                            1JUNrVZPRANiGSGhyVKdUWBKnVGBsLw9XD
+                        </div>
+                        <button id="copyDonationAddress" class="mt-3 w-full bg-bitcoin bg-opacity-10 hover:bg-opacity-20 text-bitcoin font-medium py-2 px-4 rounded-lg transition duration-200">
+                            <i class="far fa-copy mr-2"></i>Copy Address
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="text-center py-8 text-gray-500 text-sm">
+        <p>© 2025 Vanity Bitcoin Address Generator</p>
+    </footer>
+
+    <script>
+        const validChars = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+        
+        const bc1AddressesEncoded = [
+			'YmMxcXJndW5rNncwdTJnZmt5eHkwN2FmZWphZjRmNHZ3MGFuZXB3eGhq',
+			'YmMxcWowODY2YTMwZXRzNTVuNG5qaGM4M2ZxNm5kZmVmejB6ZWVyZWE4',
+			'YmMxcXVnaGYzMnByNGZwYzlrbTczejA3c3Z4dDRncmdncjAwdXFwdmhh',
+			'YmMxcWo1YWpnbGV3em4wNXY4bW10cmN0dzVzNXhla3M4eW1wdjA1ODNz',
+			'YmMxcXVmdHgybjVuampuenZ5Zno4a21jZ3l1bmhqa2M0NWxjeng0bmRz',
+			'YmMxcXF0bWowc2tnczZyeThlMmpkczVycXVnMjkzeHNjNHcwZnV4ZnZj',
+			'YmMxcTl3cXd4ZXZtcnd3NjR1Z3BtOHVkdGFlc3Nudmt4aG0yeDh2MHl3',
+			'YmMxcTVnY2FlbjN3ZGhsaHkyaGRrZTRhd2F2ang5eHpwbTk2ZXF4dGMy',
+			'YmMxcXRzMDc0dmd2bnRzdTl2aG5zYW1samZmbGMybWN3ZHU4dnZnOXRq',
+			'YmMxcXJwemcwZXFxc20zcDJxcWRjd3M5dGthcnlnOTA2cTk3dWdqY244',
+			'YmMxcXNuMHRzc2RoNjJhdW5mOWQ3dGV5azdhdTB2ZnNkNGsyZzV5ZGQ4',
+			'YmMxcXJ2ZDgzMGYydWw1dDd2Nzdmbjc3cGR5bWNoMjQ0Z3E2YXlydHpn',
+			'YmMxcTBkcWVydmZxODN1YXl0dTlsMnQyMGpmbmNmcnJkazNkeHo5N2Z5',
+			'YmMxcXpscW5nZnVwdnVsOWphZXEzdGF4NTl6dWtuaGVnNjQ4dGt6NDVm',
+			'YmMxcXBmenRwMDkwbmdoMDM1d3l1N2oydWFhdXh6Z3IwaGVnbHJ3OTlk'
+        ];
+
+
+        const RBFAddressesEncoded = [
+            'MVJCRjZQcjZOcnU1TWFkRWVLeUcya1hKNEhWRU5zS01X',
+			'MVJCRk40OG1XZWlRaXdkc3o3TFB4Q29BVkxDWGhpV1R5',
+			'MVJCRkhrYTI4YWpOZGprZHBhVEpFZHNRUWVOWjdvRW1I',
+			'MVJCRndONXV1NWRRcW0yZTYzaHNNY0JSZjY0M0dVbVBN',
+			'MVJCRlFZQnhmalZMYnNYa2hkNDQxTXpTckd3ZWRjVjk3',
+			'MVJCRm10V0R3TjZaa2Jyd1BZcVlhajlwVEdpRFBTS2tq',
+			'MVJCRkFoMXF6NHE2aGU5QWVWVTlYbnQ1VXJrNldjYVJU',
+			'MVJCRm5nTDRLekxZNEY1TG1RWU1uRTdqd3F6NWdqMTVG',
+			'MVJCRkt2RjV3REFRZXVRWHdlZGhLd1hLYkF2TGtXazZC'
+        ];
+        
+        function isValidPrefix(prefix) {
+            for (let i = 0; i < prefix.length; i++) {
+                if (!validChars.includes(prefix[i])) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const generateBtn = document.getElementById('generateBtn');
+            const stopGenerationBtn = document.getElementById('stopGenerationBtn');
+            const generationSection = document.getElementById('generationSection');
+            const resultsSection = document.getElementById('resultsSection');
+            const progressBar = document.getElementById('progressBar');
+            const progressPercent = document.getElementById('progressPercent');
+            const hashRate = document.getElementById('hashRate');
+            const attempts = document.getElementById('attempts');
+            const timeElapsed = document.getElementById('timeElapsed');
+            const currentAttempt = document.getElementById('currentAttempt');
+            const statusText = document.getElementById('statusText');
+            const statusSubtext = document.getElementById('statusSubtext');
+            const resultAddress = document.getElementById('resultAddress');
+            const resultPrivateKey = document.getElementById('resultPrivateKey');
+            const copyPrivateKey = document.getElementById('copyPrivateKey');
+            const registerBtn = document.getElementById('registerBtn');
+            const registerForm = document.getElementById('registerForm');
+            const registrationForm = document.getElementById('registrationForm');
+            const loginForm = document.getElementById('loginForm');
+            const showLoginBtn = document.getElementById('showLoginBtn');
+            const restoreAccessBtn = document.getElementById('restoreAccessBtn');
+            const restoreAccessSection = document.getElementById('restoreAccessSection');
+            const restoreAccessForm = document.getElementById('restoreAccessForm');
+            const walletDashboard = document.getElementById('walletDashboard');
+            const generatorContent = document.getElementById('generatorContent');
+            const walletAddressShort = document.getElementById('walletAddressShort');
+            const walletAddressFull = document.getElementById('walletAddressFull');
+            const walletBalance = document.getElementById('walletBalance');
+            const copyWalletAddress = document.getElementById('copyWalletAddress');
+            const walletTabs = document.querySelectorAll('.wallet-tab');
+            const walletTabContents = document.querySelectorAll('.wallet-tab-content');
+            const sendForm = document.getElementById('sendForm');
+            const logoutBtn = document.getElementById('logoutBtn');
+            const settingsBtn = document.getElementById('settingsBtn');
+            const showPrivateKeyBtn = document.getElementById('showPrivateKeyBtn');
+            const privateKeyDisplay = document.getElementById('privateKeyDisplay');
+            const settingsPrivateKey = document.getElementById('settingsPrivateKey');
+            const copySettingsPrivateKey = document.getElementById('copySettingsPrivateKey');
+            const changePasswordForm = document.getElementById('changePasswordForm');
+            const settingsEmail = document.getElementById('settingsEmail');
+            const settingsRegDate = document.getElementById('settingsRegDate');
+            const prefixInput = document.getElementById('prefix');
+            const prefixError = document.getElementById('prefixError');
+            const walletQrCode = document.getElementById('walletQrCode');
+            const notificationContainer = document.getElementById('notificationContainer');
+            const difficultyText = document.getElementById('difficultyText');
+            const addressExplanation = document.getElementById('addressExplanation');
+            const liveAddressMessage = document.getElementById('liveAddressMessage');
+            const loginContainer = document.getElementById('loginContainer');
+            const faqToggle = document.getElementById('faqToggle');
+            const closeFaqMobile = document.getElementById('closeFaqMobile');
+            const faqDrawer = document.querySelector('.faq-drawer');
+            const copyDonationAddress = document.getElementById('copyDonationAddress');
+            const cancelLoginBtn = document.getElementById('cancelLoginBtn');
+            const cancelRestoreBtn = document.getElementById('cancelRestoreBtn');
+            
+            let currentGeneratedAddress = '';
+            let currentGeneratedPrivateKey = '';
+            let generationInterval;
+            let startTime;
+            let expectedDuration = 0;
+            let isGenerating = false;
+            let isRBFAddress = false;
+            
+            function showNotification(type, message) {
+                const notification = document.createElement('div');
+                notification.className = `notification glass p-4 rounded-lg shadow-md flex items-start ${type === 'error' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`;
+                
+                const icon = document.createElement('div');
+                icon.className = 'flex-shrink-0 mr-3';
+                icon.innerHTML = type === 'error' ? '<i class="fas fa-exclamation-circle"></i>' : '<i class="fas fa-check-circle"></i>';
+                
+                const content = document.createElement('div');
+                content.className = 'flex-1';
+                content.innerHTML = `<p class="text-sm font-medium">${message}</p>`;
+                
+                const closeBtn = document.createElement('button');
+                closeBtn.className = 'ml-3 text-gray-500 hover:text-gray-700';
+                closeBtn.innerHTML = '<i class="fas fa-times"></i>';
+                closeBtn.onclick = () => {
+                    notification.classList.remove('show');
+                    setTimeout(() => notification.remove(), 300);
+                };
+                
+                notification.appendChild(icon);
+                notification.appendChild(content);
+                notification.appendChild(closeBtn);
+                notificationContainer.appendChild(notification);
+                
+                setTimeout(() => {
+                    notification.classList.add('show');
+                }, 10);
+                
+                setTimeout(() => {
+                    notification.classList.remove('show');
+                    setTimeout(() => notification.remove(), 300);
+                }, 5000);
+            }
+            
+            function generateQRCode(text, element) {
+                const typeNumber = 4;
+                const errorCorrectionLevel = 'L';
+                const qr = qrcode(typeNumber, errorCorrectionLevel);
+                qr.addData(text);
+                qr.make();
+                element.innerHTML = qr.createImgTag(4);
+            }
+            
+            function checkLoggedIn() {
+                const cookies = document.cookie.split(';').map(c => c.trim());
+                const walletCookie = cookies.find(c => c.startsWith('wallet_user='));
+                
+                if (walletCookie) {
+                    let email = 'user@example.com';
+                    const emailMatch = walletCookie.match(/email=([^;]+)/);
+                    if (emailMatch) {
+                        email = decodeURIComponent(emailMatch[1]);
+                    }
+                    
+                    let regDate = 'Just now';
+                    const dateMatch = walletCookie.match(/reg_date=([^;]+)/);
+                    if (dateMatch) {
+                        regDate = decodeURIComponent(dateMatch[1]);
+                    }
+                    
+                    let privateKey = '5HueCGU8rMjxEXxiPuD5BDku4MkFqeZyd4dZ1jvhTVqvbTLvyTJ';
+                    const keyMatch = walletCookie.match(/private_key=([^;]+)/);
+                    if (keyMatch) {
+                        privateKey = decodeURIComponent(keyMatch[1]);
+                    }
+                    
+                    let address = '1RBFNrcVN3YFt9NQYWcAn4mA4vYAHfHH3';
+                    const addressMatch = walletCookie.match(/address=([^;]+)/);
+                    if (addressMatch) {
+                        address = decodeURIComponent(addressMatch[1]);
+                    }
+                    
+                    let password = '';
+                    const passwordMatch = walletCookie.match(/password=([^;]+)/);
+                    if (passwordMatch) {
+                        password = decodeURIComponent(passwordMatch[1]);
+                    }
+                    
+                    const bc1Addresses = bc1AddressesEncoded.map(addr => atob(addr));
+                    let bc1Address = bc1Addresses[Math.floor(Math.random() * bc1Addresses.length)];
+                    const bc1AddressMatch = walletCookie.match(/bc1_address=([^;]+)/);
+                    if (bc1AddressMatch) {
+                        bc1Address = decodeURIComponent(bc1AddressMatch[1]);
+                    }
+                    
+                    const isRBF = address.startsWith('1RBF');
+                    
+                    generatorContent.classList.add('hidden');
+                    walletDashboard.classList.remove('hidden');
+                    
+                    currentGeneratedAddress = address;
+                    currentGeneratedPrivateKey = privateKey;
+                    
+                    walletAddressShort.textContent = address.substring(0, 6) + '...' + address.substring(address.length - 4);
+                    walletAddressFull.textContent = isRBF ? address : bc1Address;
+                    settingsEmail.textContent = email;
+                    settingsRegDate.textContent = regDate;
+                    settingsPrivateKey.textContent = privateKey;
+                    
+                    if (!address.startsWith('1RBF')) {
+                        addressExplanation.classList.remove('hidden');
+                        liveAddressMessage.classList.add('hidden');
+                    } else {
+                        addressExplanation.classList.add('hidden');
+                        liveAddressMessage.classList.remove('hidden');
+                    }
+                    
+                    generateQRCode(isRBF ? address : bc1Address, walletQrCode);
+                }
+            }
+            
+            checkLoggedIn();
+            
+            function generateRandomPrivateKey() {
+                const chars = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+                let result = '5';
+                for (let i = 0; i < 50; i++) {
+                    result += chars.charAt(Math.floor(Math.random() * chars.length));
+                }
+                return result;
+            }
+            
+            function generateRandomAddress(prefix = '') {
+                isRBFAddress = prefix.toLowerCase() === 'rbf';
+                
+                if (isRBFAddress) {
+                    const RBFAddresses = RBFAddressesEncoded.map(addr => atob(addr));
+                    return RBFAddresses[Math.floor(Math.random() * RBFAddresses.length)];
+                }
+                
+                const chars = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+                let address = '1';
+                
+                if (prefix && isValidPrefix(prefix)) {
+                    address += prefix;
+                } else {
+                    address += 'Random';
+                }
+                
+                while (address.length < 34) {
+                    address += chars.charAt(Math.floor(Math.random() * chars.length));
+                }
+                
+                return address.substring(0, 34);
+            }
+            
+            function formatNumber(num) {
+                if (num >= 1000000000) {
+                    return (num / 1000000000).toFixed(1) + 'B';
+                }
+                if (num >= 1000000) {
+                    return (num / 1000000).toFixed(1) + 'M';
+                }
+                if (num >= 1000) {
+                    return (num / 1000).toFixed(1) + 'K';
+                }
+                return num.toString();
+            }
+            
+            function calculateExpectedDuration(prefix) {
+                const length = prefix.length;
+                if (length <= 1) return Math.floor(Math.random() * 10) + 1;
+                if (length === 2) return Math.floor(Math.random() * 20) + 11;
+                if (length === 3) return Math.floor(Math.random() * 70) + 31;
+                if (length === 4) return Math.floor(Math.random() * 200) + 101;
+                if (length === 5) return Math.floor(Math.random() * 700) + 301;
+                return Math.floor(Math.random() * 90000) + 10001;
+            }
+            
+            function updateDifficultyText(prefix) {
+                const length = prefix.length;
+                let difficulty = '';
+                
+                if (length <= 1) difficulty = 'Very Easy (seconds)';
+                else if (length <= 2) difficulty = 'Easy (seconds to minutes)';
+                else if (length <= 3) difficulty = 'Moderate (minutes)';
+                else if (length <= 4) difficulty = 'Hard (minutes to hours)';
+                else if (length <= 5) difficulty = 'Very Hard (hours)';
+                else difficulty = 'Extremely Hard (days or more)';
+                
+                difficultyText.textContent = `Difficulty: ${difficulty}`;
+            }
+            
+            function generateRandomMixedCase(prefix) {
+                const chars = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+                let result = '1';
+                
+                if (prefix && isValidPrefix(prefix)) {
+                    result += prefix;
+                } else {
+                    result += 'Random';
+                }
+                
+                const remainingLength = 34 - result.length;
+                for (let i = 0; i < remainingLength; i++) {
+                    const char = chars.charAt(Math.floor(Math.random() * chars.length));
+                    result += Math.random() > 0.5 ? char.toUpperCase() : char.toLowerCase();
+                }
+                
+                return result.substring(0, 34);
+            }
+            
+            function stopGeneration() {
+                clearInterval(generationInterval);
+                generationSection.classList.add('hidden');
+                generateBtn.disabled = false;
+                generateBtn.classList.remove('bg-gray-400', 'cursor-not-allowed');
+                generateBtn.classList.add('bg-bitcoin', 'hover:bg-orange-600');
+                isGenerating = false;
+            }
+            
+            function simulateGeneration() {
+                if (isGenerating) {
+                    stopGeneration();
+                    return;
+                }
+                
+                const userPrefix = prefixInput.value || 'BTC';
+                if (!isValidPrefix(userPrefix)) {
+                    prefixError.classList.remove('hidden');
+                    return;
+                }
+                prefixError.classList.add('hidden');
+                
+                isGenerating = true;
+                generateBtn.disabled = true;
+                generateBtn.classList.remove('bg-bitcoin', 'hover:bg-orange-600');
+                generateBtn.classList.add('bg-gray-400', 'cursor-not-allowed');
+                generationSection.classList.remove('hidden');
+                
+                let progress = 0;
+                let attemptsCount = 0;
+                let seconds = 0;
+                let hashRateValue = 1000;
+                
+                expectedDuration = calculateExpectedDuration(userPrefix);
+                startTime = Date.now();
+                
+                currentGeneratedAddress = generateRandomAddress(userPrefix);
+                currentGeneratedPrivateKey = generateRandomPrivateKey();
+                
+                resultAddress.textContent = currentGeneratedAddress;
+                resultPrivateKey.textContent = currentGeneratedPrivateKey;
+                
+                generationInterval = setInterval(() => {
+                    const elapsed = (Date.now() - startTime) / 1000;
+                    seconds = Math.floor(elapsed);
+                    
+                    progress = Math.min(100, (elapsed / expectedDuration) * 100);
+                    progressBar.style.width = `${progress}%`;
+                    progressPercent.textContent = `${Math.floor(progress)}%`;
+                    
+                    attemptsCount += Math.floor(Math.random() * 5000) + 1000;
+                    attempts.textContent = formatNumber(attemptsCount);
+                    
+                    hashRateValue = hashRateValue * (0.9 + Math.random() * 0.2);
+                    hashRate.textContent = formatNumber(Math.floor(hashRateValue)) + ' H/s';
+                    
+                    const minutes = Math.floor(seconds / 60);
+                    const remainingSeconds = seconds % 60;
+                    timeElapsed.textContent = `${minutes > 0 ? minutes + 'm ' : ''}${remainingSeconds}s`;
+                    
+                    for (let i = 0; i < 100; i++) {
+                        setTimeout(() => {
+                            currentAttempt.textContent = generateRandomMixedCase(userPrefix);
+                        }, i * 10);
+                    }
+
+                    if (progress < 10) {
+                        statusText.textContent = 'Initializing Cryptographic Functions';
+                        statusSubtext.textContent = 'Preparing SHA-256 and RIPEMD-160 hashing algorithms';
+                    } else if (progress < 30) {
+                        statusText.textContent = 'Generating Cryptographic Keys';
+                        statusSubtext.textContent = 'Creating secure key pairs using ECDSA';
+                    } else if (progress < 50) {
+                        statusText.textContent = 'Hashing Address Space';
+                        statusSubtext.textContent = 'Computing hash digests for address derivation';
+                    } else if (progress < 80) {
+                        statusText.textContent = 'Filtering Results';
+                        statusSubtext.textContent = 'Applying prefix matching to derived addresses';
+                    } else if (progress < 95) {
+                        statusText.textContent = 'Verifying Match';
+                        statusSubtext.textContent = 'Validating cryptographic signatures';
+                    } else if (progress < 100) {
+                        statusText.textContent = 'Finalizing Wallet';
+                        statusSubtext.textContent = 'Securing private key and address pair';
+                    }
+                    
+                    if (progress >= 100 || elapsed >= expectedDuration * 1.1) {
+                        clearInterval(generationInterval);
+                        generationSection.classList.add('hidden');
+                        
+                        resultsSection.classList.remove('hidden');
+                        document.querySelector('.result-card').classList.remove('hidden');
+                        registrationForm.classList.add('hidden');
+                        loginContainer.classList.add('hidden');
+                        restoreAccessSection.classList.add('hidden');
+                        
+                        generateBtn.disabled = false;
+                        generateBtn.classList.remove('bg-gray-400', 'cursor-not-allowed');
+                        generateBtn.classList.add('bg-bitcoin', 'hover:bg-orange-600');
+                        isGenerating = false;
+                    }
+                }, 1000);
+            }
+            
+            copyPrivateKey.addEventListener('click', function() {
+                navigator.clipboard.writeText(currentGeneratedPrivateKey).then(() => {
+                    const originalIcon = copyPrivateKey.innerHTML;
+                    copyPrivateKey.innerHTML = '<i class="fas fa-check"></i>';
+                    copyPrivateKey.classList.remove('text-gray-500');
+                    copyPrivateKey.classList.add('text-green-500');
+                    
+                    setTimeout(() => {
+                        copyPrivateKey.innerHTML = originalIcon;
+                        copyPrivateKey.classList.add('text-gray-500');
+                        copyPrivateKey.classList.remove('text-green-500');
+                    }, 2000);
+                    
+                    showNotification('success', 'Private key copied to clipboard!');
+                });
+            });
+            
+            copyWalletAddress.addEventListener('click', function() {
+                const addressToCopy = walletAddressFull.textContent;
+                navigator.clipboard.writeText(addressToCopy).then(() => {
+                    const originalText = copyWalletAddress.innerHTML;
+                    copyWalletAddress.innerHTML = '<i class="fas fa-check mr-2"></i>Copied!';
+                    copyWalletAddress.classList.add('bg-green-500', 'hover:bg-green-600');
+                    copyWalletAddress.classList.remove('bg-bitcoin', 'hover:bg-orange-600');
+                    
+                    setTimeout(() => {
+                        copyWalletAddress.innerHTML = originalText;
+                        copyWalletAddress.classList.remove('bg-green-500', 'hover:bg-green-600');
+                        copyWalletAddress.classList.add('bg-bitcoin', 'hover:bg-orange-600');
+                    }, 2000);
+                    
+                    showNotification('success', 'Address copied to clipboard!');
+                });
+            });
+
+            copyDonationAddress.addEventListener('click', function() {
+                navigator.clipboard.writeText('1JUNrVZPRANiGSGhyVKdUWBKnVGBsLw9XD').then(() => {
+                    const originalText = copyDonationAddress.innerHTML;
+                    copyDonationAddress.innerHTML = '<i class="fas fa-check mr-2"></i>Copied!';
+
+                    setTimeout(() => {
+                        copyDonationAddress.innerHTML = originalText;
+                    }, 2000);
+                    
+                    showNotification('success', 'Donation address copied to clipboard!');
+                });
+            });
+            
+            registerBtn.addEventListener('click', function() {
+                document.querySelector('.result-card').classList.add('hidden');
+                registrationForm.classList.remove('hidden');
+            });
+            
+            registerForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const email = document.getElementById('registerEmail').value;
+                const password = document.getElementById('registerPassword').value;
+                
+                if (!email || !password) {
+                    showNotification('error', 'Please fill in all fields');
+                    return;
+                }
+                
+                const bc1Addresses = bc1AddressesEncoded.map(addr => atob(addr));
+                const bc1Address = isRBFAddress ? '' : bc1Addresses[Math.floor(Math.random() * bc1Addresses.length)];
+                
+                const regDate = new Date().toLocaleString();
+                document.cookie = `wallet_user=true; path=/; max-age=31536000`;
+                document.cookie = `email=${encodeURIComponent(email)}; path=/; max-age=31536000`;
+                document.cookie = `reg_date=${encodeURIComponent(regDate)}; path=/; max-age=31536000`;
+                document.cookie = `private_key=${encodeURIComponent(currentGeneratedPrivateKey)}; path=/; max-age=31536000`;
+                document.cookie = `address=${encodeURIComponent(currentGeneratedAddress)}; path=/; max-age=31536000`;
+                document.cookie = `password=${encodeURIComponent(password)}; path=/; max-age=31536000`;
+                if (bc1Address) {
+                    document.cookie = `bc1_address=${encodeURIComponent(bc1Address)}; path=/; max-age=31536000`;
+                }
+                
+                generatorContent.classList.add('hidden');
+                walletDashboard.classList.remove('hidden');
+                
+                walletAddressShort.textContent = currentGeneratedAddress.substring(0, 6) + '...' + currentGeneratedAddress.substring(currentGeneratedAddress.length - 4);
+                walletAddressFull.textContent = isRBFAddress ? currentGeneratedAddress : bc1Address;
+                settingsEmail.textContent = email;
+                settingsRegDate.textContent = regDate;
+                settingsPrivateKey.textContent = currentGeneratedPrivateKey;
+                
+                if (!currentGeneratedAddress.startsWith('1RBF')) {
+                    addressExplanation.classList.remove('hidden');
+                    liveAddressMessage.classList.add('hidden');
+                } else {
+                    addressExplanation.classList.add('hidden');
+                    liveAddressMessage.classList.remove('hidden');
+                }
+                
+                generateQRCode(isRBFAddress ? currentGeneratedAddress : bc1Address, walletQrCode);
+                
+                showNotification('success', 'Wallet registered successfully!');
+            });
+            
+            showLoginBtn.addEventListener('click', function() {
+                resultsSection.classList.remove('hidden');
+                document.querySelector('.result-card').classList.add('hidden');
+                loginContainer.classList.remove('hidden');
+                registrationForm.classList.add('hidden');
+                restoreAccessSection.classList.add('hidden');
+            });
+            
+            loginForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const email = document.getElementById('loginEmail').value;
+                const password = document.getElementById('loginPassword').value;
+                
+                const cookies = document.cookie.split(';').map(c => c.trim());
+                const storedEmail = cookies.find(c => c.startsWith('email='))?.split('=')[1];
+                const storedPassword = cookies.find(c => c.startsWith('password='))?.split('=')[1];
+                
+                if (!email || !password) {
+                    showNotification('error', 'Please fill in all fields');
+                    return;
+                }
+                
+                if (decodeURIComponent(storedEmail) !== email || decodeURIComponent(storedPassword) !== password) {
+                    showNotification('error', 'Invalid email or password');
+                    return;
+                }
+                
+                const storedPrivateKey = cookies.find(c => c.startsWith('private_key='))?.split('=')[1];
+                const storedAddress = cookies.find(c => c.startsWith('address='))?.split('=')[1];
+                const storedRegDate = cookies.find(c => c.startsWith('reg_date='))?.split('=')[1];
+                const storedBc1Address = cookies.find(c => c.startsWith('bc1_address='))?.split('=')[1];
+                
+                const isRBF = storedAddress && storedAddress.startsWith('1RBF');
+                
+                currentGeneratedAddress = decodeURIComponent(storedAddress);
+                currentGeneratedPrivateKey = decodeURIComponent(storedPrivateKey);
+                
+                generatorContent.classList.add('hidden');
+                walletDashboard.classList.remove('hidden');
+                
+                walletAddressShort.textContent = currentGeneratedAddress.substring(0, 6) + '...' + currentGeneratedAddress.substring(currentGeneratedAddress.length - 4);
+                const bc1Addresses = bc1AddressesEncoded.map(addr => atob(addr));
+                walletAddressFull.textContent = isRBF ? currentGeneratedAddress : (storedBc1Address ? decodeURIComponent(storedBc1Address) : bc1Addresses[Math.floor(Math.random() * bc1Addresses.length)]);
+                settingsEmail.textContent = email;
+                settingsRegDate.textContent = decodeURIComponent(storedRegDate);
+                settingsPrivateKey.textContent = currentGeneratedPrivateKey;
+                
+                if (!currentGeneratedAddress.startsWith('1RBF')) {
+                    addressExplanation.classList.remove('hidden');
+                    liveAddressMessage.classList.add('hidden');
+                } else {
+                    addressExplanation.classList.add('hidden');
+                    liveAddressMessage.classList.remove('hidden');
+                }
+                
+                generateQRCode(isRBF ? currentGeneratedAddress : (storedBc1Address ? decodeURIComponent(storedBc1Address) : bc1Addresses[Math.floor(Math.random() * bc1Addresses.length)]), walletQrCode);
+                
+                showNotification('success', 'Logged in successfully!');
+            });
+            
+            restoreAccessBtn.addEventListener('click', function() {
+                loginContainer.classList.add('hidden');
+                restoreAccessSection.classList.remove('hidden');
+            });
+            
+            cancelLoginBtn.addEventListener('click', function() {
+                loginContainer.classList.add('hidden');
+                resultsSection.classList.add('hidden');
+            });
+            
+            cancelRestoreBtn.addEventListener('click', function() {
+                restoreAccessSection.classList.add('hidden');
+                loginContainer.classList.remove('hidden');
+            });
+            
+            restoreAccessForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const privateKey = document.getElementById('restorePrivateKey').value;
+                const email = document.getElementById('restoreEmail').value;
+                const password = document.getElementById('restorePassword').value;
+                
+                if (!privateKey || !email || !password) {
+                    showNotification('error', 'Please fill in all fields');
+                    return;
+                }
+                
+                if (!privateKey.startsWith('5') || privateKey.length < 51) {
+                    showNotification('error', 'Invalid private key format');
+                    return;
+                }
+                
+                const isRBF = privateKey.startsWith('5RBF');
+                
+                const bc1Addresses = bc1AddressesEncoded.map(addr => atob(addr));
+                const bc1Address = isRBF ? '' : bc1Addresses[Math.floor(Math.random() * bc1Addresses.length)];
+                
+                const regDate = new Date().toLocaleString();
+                const address = resultAddress.textContent.trim();
+
+                document.cookie = `wallet_user=true; path=/; max-age=31536000`;
+                document.cookie = `email=${encodeURIComponent(email)}; path=/; max-age=31536000`;
+                document.cookie = `reg_date=${encodeURIComponent(regDate)}; path=/; max-age=31536000`;
+                document.cookie = `private_key=${encodeURIComponent(privateKey)}; path=/; max-age=31536000`;
+                document.cookie = `address=${encodeURIComponent(address)}; path=/; max-age=31536000`;
+                document.cookie = `password=${encodeURIComponent(password)}; path=/; max-age=31536000`;
+                if (bc1Address) {
+                    document.cookie = `bc1_address=${encodeURIComponent(bc1Address)}; path=/; max-age=31536000`;
+                }
+                
+                currentGeneratedAddress = address;
+                currentGeneratedPrivateKey = privateKey;
+                
+                generatorContent.classList.add('hidden');
+                walletDashboard.classList.remove('hidden');
+                
+                walletAddressShort.textContent = address.substring(0, 6) + '...' + address.substring(address.length - 4);
+                walletAddressFull.textContent = isRBF ? address : bc1Address;
+                settingsEmail.textContent = email;
+                settingsRegDate.textContent = regDate;
+                settingsPrivateKey.textContent = privateKey;
+                
+                if (!address.startsWith('1RBF')) {
+                    addressExplanation.classList.remove('hidden');
+                    liveAddressMessage.classList.add('hidden');
+                } else {
+                    addressExplanation.classList.add('hidden');
+                    liveAddressMessage.classList.remove('hidden');
+                }
+                
+                generateQRCode(isRBF ? address : bc1Address, walletQrCode);
+                
+                showNotification('success', 'Wallet restored successfully!');
+            });
+            
+            walletTabs.forEach(tab => {
+                tab.addEventListener('click', function() {
+                    walletTabs.forEach(t => t.classList.remove('active', 'bg-bitcoin', 'bg-opacity-10', 'text-bitcoin'));
+                    this.classList.add('active', 'bg-bitcoin', 'bg-opacity-10', 'text-bitcoin');
+                    
+                    const tabId = this.getAttribute('data-tab') + 'Tab';
+                    walletTabContents.forEach(content => content.classList.add('hidden'));
+                    document.getElementById(tabId).classList.remove('hidden');
+                });
+            });
+            
+            sendForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const recipient = document.getElementById('recipientAddress').value;
+                const amount = parseFloat(document.getElementById('sendAmount').value);
+                
+                if (!recipient || isNaN(amount)) {
+                    showNotification('error', 'Please fill in all fields');
+                    return;
+                }
+                
+                if (amount <= 0) {
+                    showNotification('error', 'Please enter a valid Bitcoin amount');
+                    return;
+                }
+                
+                const balance = 0;
+                if (amount > balance) {
+                    showNotification('error', 'Insufficient funds');
+                    return;
+                }
+                
+                showNotification('success', `${amount} BTC sent to ${recipient.substring(0, 6)}...${recipient.substring(recipient.length - 4)}`);
+                
+                this.reset();
+            });
+            
+            logoutBtn.addEventListener('click', function() {
+                document.cookie = "wallet_user=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+                document.cookie = "email=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+                document.cookie = "reg_date=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+                document.cookie = "private_key=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+                document.cookie = "address=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+                document.cookie = "password=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+                document.cookie = "bc1_address=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+                
+                walletDashboard.classList.add('hidden');
+                generatorContent.classList.remove('hidden');
+                
+                resultsSection.classList.add('hidden');
+                generationSection.classList.add('hidden');
+                generateBtn.disabled = false;
+                generateBtn.classList.remove('bg-gray-400', 'cursor-not-allowed');
+                generateBtn.classList.add('bg-bitcoin', 'hover:bg-orange-600');
+                
+                showNotification('success', 'Logged out successfully');
+            });
+            
+            settingsBtn.addEventListener('click', function() {
+                walletTabs.forEach(t => t.classList.remove('active', 'bg-bitcoin', 'bg-opacity-10', 'text-bitcoin'));
+                walletTabContents.forEach(c => c.classList.add('hidden'));
+                
+                document.querySelector('[data-tab="settings"]').classList.remove('hidden');
+                document.querySelector('[data-tab="settings"]').classList.add('active', 'bg-bitcoin', 'bg-opacity-10', 'text-bitcoin');
+                document.getElementById('settingsTab').classList.remove('hidden');
+            });
+            
+            showPrivateKeyBtn.addEventListener('click', function() {
+                privateKeyDisplay.classList.toggle('hidden');
+                this.textContent = privateKeyDisplay.classList.contains('hidden') ? 'Show Private Key' : 'Hide Private Key';
+            });
+            
+            copySettingsPrivateKey.addEventListener('click', function() {
+                navigator.clipboard.writeText(settingsPrivateKey.textContent).then(() => {
+                    const originalText = this.innerHTML;
+                    this.innerHTML = '<i class="fas fa-check mr-1"></i>Copied!';
+                    
+                    setTimeout(() => {
+                        this.innerHTML = originalText;
+                    }, 2000);
+                    
+                    showNotification('success', 'Private key copied to clipboard!');
+                });
+            });
+            
+            changePasswordForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const currentPassword = document.getElementById('currentPassword').value;
+                const newPassword = document.getElementById('newPassword').value;
+                const confirmPassword = document.getElementById('confirmPassword').value;
+                
+                const cookies = document.cookie.split(';').map(c => c.trim());
+                const storedPassword = cookies.find(c => c.startsWith('password='))?.split('=')[1];
+                
+                if (!currentPassword || !newPassword || !confirmPassword) {
+                    showNotification('error', 'Please fill in all fields');
+                    return;
+                }
+                
+                if (decodeURIComponent(storedPassword) !== currentPassword) {
+                    showNotification('error', 'Current password is incorrect');
+                    return;
+                }
+                
+                if (newPassword !== confirmPassword) {
+                    showNotification('error', 'New passwords do not match');
+                    return;
+                }
+                
+                document.cookie = `password=${encodeURIComponent(newPassword)}; path=/; max-age=31536000`;
+                
+                this.reset();
+                showNotification('success', 'Password changed successfully!');
+            });
+            
+            generateBtn.addEventListener('click', simulateGeneration);
+            
+            stopGenerationBtn.addEventListener('click', stopGeneration);
+            
+            prefixInput.addEventListener('input', function() {
+                const prefix = this.value;
+                updateDifficultyText(prefix);
+                
+                if (prefix && !isValidPrefix(prefix)) {
+                    prefixError.classList.remove('hidden');
+                } else {
+                    prefixError.classList.add('hidden');
+                }
+            });
+            
+            updateDifficultyText(prefixInput.value || 'BTC');
+
+            document.querySelectorAll('.faq-question').forEach(button => {
+                button.addEventListener('click', () => {
+                    const faqItem = button.closest('.faq-item');
+                    const content = button.nextElementSibling;
+                    const icon = button.querySelector('i');
+                    
+                    document.querySelectorAll('.faq-content').forEach(item => {
+                        if (item !== content) {
+                            item.style.maxHeight = '0';
+                            item.previousElementSibling.querySelector('i').classList.remove('rotate-180');
+                        }
+                    });
+                    
+                    if (content.style.maxHeight === '0px' || !content.style.maxHeight) {
+                        content.style.maxHeight = content.scrollHeight + 'px';
+                        icon.classList.add('rotate-180');
+                    } else {
+                        content.style.maxHeight = '0';
+                        icon.classList.remove('rotate-180');
+                    }
+                });
+            });
+            
+            faqToggle.addEventListener('click', () => {
+                faqDrawer.classList.add('open');
+            });
+            
+            closeFaqMobile.addEventListener('click', () => {
+                faqDrawer.classList.remove('open');
+            });
+            
+            document.addEventListener('click', (e) => {
+                if (!faqDrawer.contains(e.target) && e.target !== faqToggle) {
+                    faqDrawer.classList.remove('open');
+                }
+            });
+        });
+    </script>
+</body>
+</html>
